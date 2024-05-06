@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF Viewer</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+        }
+        #pdfContainer {
+            width: 600px; /* Adjust the width as needed */
+            height: 800px; /* Adjust the height as needed */
+            border: 1px solid #ccc;
+            margin: 20px auto;
+            overflow: auto; /* Allow overflow with scrollbars */
+            display: flex;
+            flex-direction: column; /* Display pages vertically */
+        }
+        .landscape {
+            width: 800px; /* Adjust the width for landscape orientation */
+            height: 600px; /* Adjust the height for landscape orientation */
+        }
+        canvas {
+            display: block;
+            max-width: 100%;
+            height: auto;
+            margin-bottom: 10px;
+        }
+        .reverse {
+            flex-direction: column-reverse; /* Display pages vertically in reverse order */
+        }
+        .hidden {
+            display: none;
+        }
+        @media print {
+            #pdfContainer {
+                width: auto;
+                height: auto;
+                border: none;
+                margin: 0;
+                overflow: visible;
+            }
+            canvas {
+                page-break-after: avoid;
+                page-break-before: avoid;
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>Upload and View PDF</h1>
+    
+    <input type="file" id="pdfFile" accept=".pdf">
+    <div>
+        <label for="totalPages">Total Pages: </label>
+        <span id="totalPages">-</span>
+    </div>
+    <div id="pdfContainer"></div>
+    <label for="startPage">Start Page:</label>
+    <input type="number" id="startPage" value="1" min="1">
+    <label for="endPage">End Page:</label>
+    <input type="number" id="endPage" value="1" min="1">
+    <button onclick="displayPages()">Display Pages</button>
+    <button onclick="flipOrientation()">Flip Orientation</button>
+    <button onclick="printPDF()">Print PDF</button>
+
+    <canvas id="hiddenCanvas" class="hidden"></canvas>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.min.js"></script>
+    <script>
+        let isReversed = false;
+
+        document.getElementById('pdfFile').addEventListener('change', function(event) {
+            var file = event.target.files[0];
+            var fileReader = new FileReader();
+
+            fileReader.onload = function() {
+                var pdfData = new Uint8Array(this.result);
+                pdfjsLib.getDocument({ data: pdfData }).promise.then(function(pdf) {
+                    document.getElementById('pdfContainer').innerHTML = '';
+                    document.getElementById('totalPages').textContent = pdf.numPages;
+                    for (var pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+                        pdf.getPage(pageNum).then(function(page) {
+                            var canvas = document.createElement('canvas');
+                            var context = canvas.getContext('2d');
+                            var viewport = page.getViewport({ scale: 1.5 });
+
+                            canvas.height = viewport.height;
+                            canvas.width = viewport.width;
+
+                            var renderContext = {
+                                canvasContext: context,
+                                viewport: viewport
+                            };
+
+                            page.render(renderContext).promise.then(function() {
+                                document.getElementById('pdfContainer').appendChild(canvas);
+                            });
+                        });
+                    }
+                });
+            };
+
+            fileReader.readAsArrayBuffer(file);
+        });
+
+        function displayPages() {
+            var startPage = parseInt(document.getElementById('startPage').value);
+            var endPage = parseInt(document.getElementById('endPage').value);
+
+            if (startPage <= endPage) {
+                var file = document.getElementById('pdfFile').files[0];
+                var fileReader = new FileReader();
+
+                fileReader.onload = function() {
+                    var pdfData = new Uint8Array(this.result);
+                    pdfjsLib.getDocument({ data: pdfData }).promise.then(function(pdf) {
+                        document.getElementById('pdfContainer').innerHTML = '';
+                        if (isReversed) {
+                            for (var pageNum = endPage; pageNum >= startPage; pageNum--) {
+                                pdf.getPage(pageNum).then(function(page) {
+                                    var canvas = document.createElement('canvas');
+                                    var context = canvas.getContext('2d');
+                                    var viewport = page.getViewport({ scale: 1.5 });
+
+                                    canvas.height = viewport.height;
+                                    canvas.width = viewport.width;
+
+                                    var renderContext = {
+                                        canvasContext: context,
+                                        viewport: viewport
+                                    };
+
+                                    page.render(renderContext).promise.then(function() {
+                                        document.getElementById('pdfContainer').appendChild(canvas);
+                                    });
+                                });
+                            }
+                        } else {
+                            for (var pageNum = startPage; pageNum <= endPage; pageNum++) {
+                                pdf.getPage(pageNum).then(function(page) {
+                                    var canvas = document.createElement('canvas');
+                                    var context = canvas.getContext('2d');
+                                    var viewport = page.getViewport({ scale: 1.5 });
+
+                                    canvas.height = viewport.height;
+                                    canvas.width = viewport.width;
+
+                                    var renderContext = {
+                                        canvasContext: context,
+                                        viewport: viewport
+                                    };
+
+                                    page.render(renderContext).promise.then(function() {
+                                        document.getElementById('pdfContainer').appendChild(canvas);
+                                    });
+                                });
+                            }
+                        }
+                    });
+                };
+
+                fileReader.readAsArrayBuffer(file);
+            } else {
+                alert('End Page must be greater than or equal to Start Page.');
+            }
+        }
+
+        function flipOrientation() {
+            isReversed = !isReversed;
+            const container = document.getElementById('pdfContainer');
+            container.classList.toggle('reverse', isReversed);
+        }
+
+        function printPDF() {
+            var canvases = document.querySelectorAll('#pdfContainer canvas');
+
+            if (canvases.length === 0) {
+                alert('No PDF pages to print.');
+                return;
+            }
+
+
+
+            canvases.forEach(function(canvas, index) {
+                var imageData = canvas.toDataURL('image/png');
+                printWindow.document.write('<img src="' + imageData + '" style="width:100%;"/>');
+            });
+
+            var printWindow = window.open('<img src="' + imageData + '" style="width:100%;"/>');
+            printWindow.document.write('<html><head><title>Print</title></head><body>');
+
+            printWindow.document.write('</body></html>');
+            printWindow.document.close();
+            printWindow.print();
+        }
+    </script>
+</body>
+</html>
